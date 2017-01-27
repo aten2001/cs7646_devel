@@ -99,10 +99,10 @@ def test_code():
 
     start_date = dt.datetime(2010,06,01)
     end_date = dt.datetime(2011,06,01)
-    symbols = ['AAPL', 'GLD', 'GOOG', 'XOM']
+    symbols = ['AAPL', 'GLD','GOOG', 'XOM']
     allocations = [0.1, 0.4, 0.5, 0.0]
     start_val = 1000000
-    risk_free_rate = 0.5
+    risk_free_rate = 0.005
     sample_freq = 252
     # Assess the portfolio
 

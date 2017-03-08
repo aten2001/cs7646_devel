@@ -24,57 +24,43 @@ def compute_portvals(orders_file = "./orders/orders.csv", start_val = 1000000):
     # get the reference dates when SPY trades
     dates = get_data(['SPY'], dates).index.get_values()
     symbols = orders.get('Symbol').unique().tolist()
-
-    # read in adjusted closed pirces using the util function
-    prices_all = get_data(symbols, dates)
-    # get prices of only portfolio symbols, eject SPY
-    prices = prices_all[symbols]
-    prices = pd.concat([prices, pd.DataFrame(index=dates)], axis=1)
-    # fill in nan values
-    prices = prices.fillna(method='ffill') 
-    # Add SPY for comparison
-    prices_SPY = prices_all['SPY']
+    orders = pd.read_csv( orders_file, index_col='Date')  
+    orders['Shares'][orders['Order'].str.upper()=='SELL'] = -orders['Shares'][orders['Order'].str.upper()=='SELL']
+    df = get_data(['SPY'], dates)
     
-    # Init leverage dataframe
-    leverage = pd.DataFrame(columns=['leverage'], index=[dates])
-    leverage.ix[:,['leverage']] = 0
-
-    #  Init cash transactions
-    cash_transactions = pd.DataFrame(columns=['cash_transaction'], index=[dates])
-    cash_transactions.ix[0, ['cash_transaction']] = start_val
-    cash_transactions = cash_transactions.fillna(value=0)
+    # Create a data frame to hold a matrix of all the stocks
+    symbols = np.unique(orders['Symbol'].values.ravel())  
+    for stock in symbols: 
+        df[stock]=0   
     
-    # init share transactions
-    share_transactions = pd.DataFrame(columns = symbols, index = [dates])
-    share_transactions = share_transactions.fillna(value=0)
+    prices = get_data(symbols, df.index, False)
+    prices = prices.fillna(method='ffill', axis=0)
+    prices = prices.fillna(method='bfill', axis=0)
     
-    # derive positionsleverage = (sum(abs(all stock positions))) / (sum(all stock positions) + cash)
-    columns = ['cash']
-    positions = pd.DataFrame(columns=columns, index=[dates])
-    positions.ix[0] = 0
-    # Loop orders
-    for i in range(len(orders)):
-        if orders.ix[i]['Order'] == 'BUY':
-            factor = 1.0
+    df['Cash'] = start_val + 0.0
+    prices['Cash'] = 1
+    orders['Prices'] = 0
+    for ind, row in orders.iterrows():
+        # calculate leverage        
+        # leverage = (sum(longs) + sum(abs(shorts)) / ((sum(longs) - sum(abs(shorts)) + cash)
+        # get temporary table after the transaction is made, and before the transaction is made
+        df_chk, df_chk_b4 = df.ix[ind,1:], df.ix[ind,1:]
+        df_chk [row['Symbol']] = df[row['Symbol']][ind] + row['Shares']
+        df_chk ['Cash'] = df['Cash'][ind] - prices[row['Symbol']][ind] * row['Shares']
+        df_chk        = prices.ix[ind] * df_chk
+        df_chk_b4  = prices.ix[ind] * df_chk_b4
+        # calculate the leverage after and before 
+        lev_after = sum(abs(df_chk[:-1])) / sum(df_chk )
+        lev_before = sum(abs(df_chk_b4[:-1])) / sum(df_chk_b4 )
+        # print lev_after, lev_before, ind
+        if lev_after < 1.5 or lev_after < lev_before :      
+            df[row['Symbol']][ind:end_date] = df[row['Symbol']][ind:end_date] + row['Shares']
+            df['Cash'][ind:end_date] = df['Cash'][ind:end_date] - prices[row['Symbol']][ind] * row['Shares']
         else:
-            factor = -1.0
-        share_transactions.ix[orders.index[i].to_datetime(), orders.ix[i]['Symbol']] = share_transactions.ix[orders.index[i].to_datetime(), orders.ix[i]['Symbol']] + factor * orders.ix[i]['Shares']
-        order_cost = factor * orders.ix[i]['Shares'] * prices.ix[orders.index[i].to_datetime()][orders.ix[i]['Symbol']]
-        cash_transactions.ix[orders.index[i].to_datetime(), ['cash_transaction']] = cash_transactions.ix[orders.index[i].to_datetime(),  ['cash_transaction']] - order_cost
-        p = share_transactions.ix[orders.index[i].to_datetime(), orders.ix[i]['Symbol']]
+            print "Cancel the order", ind, row['Symbol'], row['Shares'], "Lev before", lev_before , "Lev after",  lev_after 
     
-    
-    # Sum up all cash transactions
-    
-    positions.cash = cash_transactions.cash_transaction.cumsum()
-    # sum up total numbers in a portfolio
-    shares = share_transactions.cumsum()
-    
-    positions = pd.concat([positions,shares * prices],axis=1)
-    # todo filter based on leverage
-    
-    portvals = positions.sum(axis=1)
-    
+    df = df.iloc[:,1:] * prices
+    portvals = df.sum(axis=1)
     
 
     return portvals
@@ -101,7 +87,7 @@ def test_code():
     # note that during autograding his function will not be called.
     # Define input parameters
 
-    of = "./orders/orders2.csv"
+    of = "./orders/orders3.csv"
     sv = 1000000
     
     # Process orders

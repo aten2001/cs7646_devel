@@ -42,6 +42,9 @@ class QLearner(object):
         self.s = 0
         self.a = 0
 
+    def author(self):
+        return 'raghavendra6
+
     def querysetstate(self, s):
         """
         @summary: Update the state without updating the Q-table
